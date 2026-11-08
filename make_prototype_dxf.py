@@ -18,6 +18,8 @@ C = dict(
     mould=(168, 170, 173), mould_in=(70, 72, 75), panel=(230, 230, 226),
     plate=(255, 255, 255), red=(205, 35, 35), green=(35, 155, 65),
     yellow=(245, 200, 0), display=(18, 18, 18), floor=(214, 212, 205),
+    mplate=(204, 206, 209), rail=(160, 163, 168), mcb=(246, 246, 242),
+    dev=(72, 76, 84), term=(96, 128, 170), sink=(185, 188, 192), black=(25, 25, 25),
 )
 LAYER_FILL = {"FRAME": "frame", "SHREDDER": "shred", "BLADES": "blade",
               "PRESS": "press", "HYDRAULIC": "hyd", "ELECTRICAL": "panel",
@@ -42,6 +44,7 @@ LAYERS = {
     "TEXT": 7,
     "DIMS": 7,
     "TITLE": 7,
+    "BALLOON": 7,
 }
 for name, col in LAYERS.items():
     doc.layers.add(name, color=col)  # 7 = black on white paper / white on dark screen
@@ -252,7 +255,7 @@ text("FRONT VIEW", 1000, -280, 50)
 # =====================================================================
 # TOP VIEW (third-angle: above the front view; front edge at bottom)
 # =====================================================================
-TX, TY = 0, 1900
+TX, TY = 0, 2100
 
 def stand_top(x1, x2):
     rect(x1, 0, x2, D, "FRAME", TX, TY)
@@ -341,6 +344,212 @@ vdim(690, 900, 0, -150, SX, SY)
 text("RIGHT SIDE VIEW", 350, -280, 50, ox=SX, oy=SY)
 
 # =====================================================================
+# BALLOONS: numbered circle + straight leader with an arrowhead on the part
+# =====================================================================
+def balloon(label, bx, by, tx, ty, r=38, th=32):
+    """Numbered balloon at (bx, by) pointing at the part at (tx, ty)."""
+    circle(bx, by, r, "BALLOON", fill="plate")
+    text(label, bx, by, th, "BALLOON")
+    dx, dy = tx - bx, ty - by
+    L = math.hypot(dx, dy)
+    ux, uy = dx / L, dy / L
+    al, aw = 40, 11                               # arrow length / half width
+    sx, sy = bx + ux * r, by + uy * r             # leader starts on the circle edge
+    ex, ey = tx - ux * al, ty - uy * al           # ...and ends at the arrow base
+    line(sx, sy, ex, ey, "BALLOON")
+    msp.add_solid([(tx, ty), (ex - uy * aw, ey + ux * aw), (ex + uy * aw, ey - ux * aw)],
+                  dxfattribs={"layer": "BALLOON"})
+
+
+# (number, balloon x, y, arrow tip x, y) - front view, plus the gearbox in the top view
+for no, bx, by, tx, ty in (
+    (1, -60, 1420, 135, 1290),       # hopper
+    (2, -60, 1130, 330, 930),        # cutters
+    (3, 860, 1170, 760, 1010),       # housing
+    (4, 860, 600, 860, 768),         # chute
+    (5, 860, 440, 730, 450),         # bin
+    (6, 1550, 1600, 1365, 1180),     # hydraulic cylinder
+    (7, 850, 1600, 950, 1040),       # crown
+    (8, 1780, 1260, 1650, 960),      # pillars
+    (9, 1050, 1600, 1100, 860),      # upper platen
+    (10, 2050, 720, 1590, 720),      # lower platen
+    (11, 2050, 480, 1584, 520),      # mould tray
+    (12, -200, 800, -20, 800),       # shredder control panel
+    (13, 2050, 1250, 1960, 1140),    # press control panel
+    (14, -80, 450, 30, 450),         # frame
+    (15, 860, TY - 180, 890, TY + 430),   # gearbox (top view)
+):
+    balloon(str(no), bx, by, tx, ty)
+
+# =====================================================================
+# CONTROL PANEL DETAILS (scale 1:10 = 2x the main views)
+# =====================================================================
+class Detail:
+    """Draws in front-view coordinates, scaled k times and moved to (ox, oy)."""
+    def __init__(self, x0, y0, ox, oy, k=2):
+        self.x0, self.y0, self.ox, self.oy, self.k = x0, y0, ox, oy, k
+
+    def P(self, x, y):
+        return (self.ox + (x - self.x0) * self.k, self.oy + (y - self.y0) * self.k)
+
+    def rect(self, x1, y1, x2, y2, layer="ELECTRICAL", fill=None):
+        (a, b), (c, d) = self.P(x1, y1), self.P(x2, y2)
+        rect(a, b, c, d, layer, fill=fill)
+
+    def circle(self, cx, cy, r, layer="ELECTRICAL", fill=None):
+        circle(*self.P(cx, cy), r * self.k, layer, fill=fill)
+
+    def poly(self, pts, layer="ELECTRICAL", fill=None):
+        poly([self.P(*q) for q in pts], layer, fill=fill)
+
+    def line(self, x1, y1, x2, y2, layer="ELECTRICAL"):
+        line(*self.P(x1, y1), *self.P(x2, y2), layer)
+
+    def text(self, s, x, y, h, layer="TEXT"):
+        text(s, *self.P(x, y), h * self.k, layer)
+
+    def callouts(self, items, bx, bx_left=None, gap=95):
+        """items = [(label, tx, ty[, side[, by]])] in local coords. Balloons sit in a column at
+        model x = bx (side "R") or bx_left (side "L"), kept at least `gap` apart vertically,
+        each with a straight leader + arrow. `by` forces a local balloon height."""
+        for side, col in (("R", bx), ("L", bx_left)):
+            pts = []
+            for it in items:
+                lab, tx, ty = it[:3]
+                if (it[3] if len(it) > 3 else "R") != side:
+                    continue
+                by = self.P(0, it[4])[1] if len(it) > 4 else self.P(tx, ty)[1]
+                pts.append((by, lab, *self.P(tx, ty)))
+            pts.sort()
+            last = None
+            for by, lab, tx, ty in pts:
+                by = by if last is None else max(by, last + gap)
+                balloon(lab, col, by, tx, ty, r=36, th=24)
+                last = by
+
+
+def din_rail(d, x1, x2, y):
+    d.rect(x1, y - 17, x2, y + 17, fill="rail")
+    d.line(x1, y - 9, x2, y - 9)
+    d.line(x1, y + 9, x2, y + 9)
+
+
+def terminals(d, x, y1, y2, n, w=12, gap=2):
+    for i in range(n):
+        d.rect(x + i * (w + gap), y1, x + i * (w + gap) + w, y2, fill="term" if i % 4 else "mcb")
+
+
+# ---------- Detail A: shredder control panel (part 12) ----------
+A1 = Detail(-20, 660, 3900, 2050)          # door (as seen from the front)
+A1.rect(-20, 660, 180, 950)
+A1.rect(-10, 670, 170, 940)
+for hy in (700, 905):                      # hinges, left edge
+    A1.rect(-26, hy, -20, hy + 30, fill="shaft")
+A1.rect(160, 790, 172, 830, fill="hyd")    # door lock
+A1.poly([(20, 890), (50, 890), (35, 915)], fill="yellow")
+A1.circle(115, 895, 18, fill="green"); A1.text("ON", 115, 862, 7)
+A1.circle(115, 815, 18, fill="red"); A1.text("OFF", 115, 782, 7)
+A1.circle(60, 740, 32, fill="yellow"); A1.rect(52, 712, 68, 768, fill="red")
+A1.text("MAIN SW", 60, 694, 7)
+A1.callouts([("C1", 60, 740), ("C2", 133, 895), ("C3", 133, 815), ("C4", 42, 905)], 4380)
+text("DETAIL A - PANEL 12 DOOR", 4100, 2700, 30)
+
+A2 = Detail(-20, 660, 4600, 2050)          # inside, door removed
+A2.rect(-20, 660, 180, 950)
+A2.rect(-10, 670, 170, 940, fill="mplate")
+din_rail(A2, -5, 165, 880)
+A2.rect(5, 835, 41, 925, fill="mcb"); A2.rect(17, 872, 29, 890, fill="black")       # MCB
+A2.rect(60, 855, 110, 925, fill="dev"); A2.rect(75, 900, 95, 915, fill="mcb")      # contactor
+A2.rect(62, 800, 108, 853, fill="dev"); A2.circle(85, 825, 7, fill="red")         # overload
+din_rail(A2, -5, 165, 720)
+terminals(A2, 10, 695, 745, 10)
+for gx in (20, 70, 120):                   # cable glands under the box
+    A2.rect(gx, 645, gx + 24, 660, fill="black")
+A2.callouts([("C5", 5, 880, "L"), ("C6", 110, 905), ("C7", 108, 820), ("C8", 120, 720),
+             ("C9", 132, 652)], 5080, 4510)
+text("DETAIL A - PANEL 12 INSIDE", 4800, 2700, 30)
+
+# ---------- Detail B: heat press control panel (part 13) ----------
+B1 = Detail(1730, 790, 3900, 1150)
+B1.rect(1730, 790, 1980, 1140)
+B1.rect(1740, 800, 1970, 1130)
+for hy in (830, 1070):                     # hinges, right edge
+    B1.rect(1980, hy, 1986, hy + 30, fill="shaft")
+B1.rect(1738, 940, 1750, 990, fill="hyd")  # door lock
+B1.rect(1800, 1040, 1910, 1110, fill="display")
+for _t, _y, _h, _c in (("160°", 1085, 22, "red"), ("160°", 1055, 16, "green")):
+    _e = msp.add_text(_t, height=_h * 2, dxfattribs={"layer": "TEXT", "style": "OpenSans"})
+    _e.set_placement(B1.P(1855, _y), align=TextEntityAlignment.MIDDLE_CENTER)
+    if COLOR:
+        _e.rgb = C[_c]
+for i, (lbl, col) in enumerate((("STOP", "red"), ("START", "green"), ("HEAT", "red"))):
+    B1.circle(1790 + i * 65, 970, 17, fill=col); B1.text(lbl, 1790 + i * 65, 937, 6.5)
+B1.circle(1855, 870, 25, fill="hyd"); B1.line(1855, 850, 1855, 890)
+B1.text("MODE", 1855, 828, 6.5)
+B1.callouts([("C10", 1910, 1075), ("C11", 1773, 970, "L"), ("C12", 1855, 987, "L"),
+             ("C13", 1937, 970), ("C14", 1880, 870)], 4480, 3830)
+text("DETAIL B - PANEL 13 DOOR", 4150, 1910, 30)
+
+B2 = Detail(1730, 790, 4700, 1150)
+B2.rect(1730, 790, 1980, 1140)
+B2.rect(1740, 800, 1970, 1130, fill="mplate")
+din_rail(B2, 1745, 1862, 1055)
+B2.rect(1755, 1010, 1791, 1100, fill="mcb"); B2.rect(1767, 1047, 1779, 1065, fill="black")   # MCB
+B2.rect(1805, 1015, 1855, 1095, fill="dev"); B2.rect(1820, 1070, 1840, 1085, fill="mcb")    # contactor
+B2.rect(1870, 990, 1960, 1115, fill="sink")                # heat sink with fins
+for fx in range(1878, 1960, 10):
+    B2.line(fx, 990, fx, 1115)
+B2.rect(1885, 1020, 1945, 1085, fill="dev"); B2.text("SSR", 1915, 1052, 9, "TEXT")
+din_rail(B2, 1745, 1965, 845)
+terminals(B2, 1755, 820, 870, 14)
+for gx in (1750, 1800, 1850):
+    B2.rect(gx, 775, gx + 24, 790, fill="black")
+B2.callouts([("C15", 1945, 1050), ("C16", 1830, 1015, "L", 960), ("C17", 1755, 1060, "L"),
+             ("C18", 1950, 845), ("C19", 1874, 782)], 5280, 4620)
+text("DETAIL B - PANEL 13 INSIDE", 4950, 1910, 30)
+
+# ---------- component list ----------
+COMPONENTS = [
+    ("C1", "Main isolator switch, rotary, lockable", "12 / door"),
+    ("C2", "ON push button, green (start shredder)", "12 / door"),
+    ("C3", "OFF push button, red (stop shredder)", "12 / door"),
+    ("C4", "Electrical hazard warning label", "12 / door"),
+    ("C5", "Circuit breaker (MCB), motor supply", "12 / inside *"),
+    ("C6", "Shredder motor contactor", "12 / inside *"),
+    ("C7", "Thermal overload relay", "12 / inside *"),
+    ("C8", "Terminal block on DIN rail", "12 / inside *"),
+    ("C9", "Cable glands (power in, motor out)", "12 / bottom *"),
+    ("C10", "Temperature controller (PID, 160 °C)", "13 / door"),
+    ("C11", "STOP push button, red", "13 / door"),
+    ("C12", "START push button, green", "13 / door"),
+    ("C13", "HEAT push button / lamp, red", "13 / door"),
+    ("C14", "MODE selector switch", "13 / door"),
+    ("C15", "Solid-state relay (SSR) on heat sink", "13 / inside *"),
+    ("C16", "Hydraulic pump contactor", "13 / inside *"),
+    ("C17", "Circuit breaker (MCB)", "13 / inside *"),
+    ("C18", "Terminal block on DIN rail", "13 / inside *"),
+    ("C19", "Cable glands (power, heaters, thermocouple)", "13 / bottom *"),
+]
+
+
+def table(x0, ytop, title, header, rows, widths, rowh=40, th=22):
+    text(title, x0 + sum(widths) / 2, ytop + 40, 36, "TITLE")
+    for r, row in enumerate([header] + rows):
+        y = ytop - (r + 1) * rowh
+        cx = x0
+        for c, cell in enumerate(row):
+            rect(cx, y, cx + widths[c], y + rowh, "TITLE")
+            text(cell, cx + 12, y + rowh / 2, th, "TITLE", TextEntityAlignment.MIDDLE_LEFT)
+            cx += widths[c]
+    return ytop - (len(rows) + 1) * rowh
+
+
+yb = table(3900, 1000, "CONTROL PANEL COMPONENTS", ("NO.", "DESCRIPTION", "PANEL / WHERE"),
+           [list(c) for c in COMPONENTS], [100, 720, 300])
+text("* INSIDE PARTS ARE TYPICAL WIRING, NOT VISIBLE IN THE PHOTO - CONFIRM ON THE MACHINE.",
+     3900, yb - 40, 20, "TEXT", TextEntityAlignment.MIDDLE_LEFT)
+
+# =====================================================================
 # NOTES, PARTS LIST & TITLE BLOCK
 # =====================================================================
 NX, NY = 2400, 1900
@@ -350,52 +559,43 @@ parts = [
     ("3", "Shredder housing / chamber", "MS plate 6 mm"),
     ("4", "Discharge chute", "MS sheet 2 mm"),
     ("5", "Collection bin", "MS sheet 2 mm"),
-    ("6", "Hydraulic cylinder + ram", "Ø120 / Ø80"),
+    ("6", "Hydraulic cylinder + ram + oil tank", "Ø120 / Ø80"),
     ("7", "Crown plate", "MS plate 25 mm"),
     ("8", "Guide pillars (4x)", "Ø50 C45 shaft"),
     ("9", "Upper heated platen", "Al / MS w/ heaters"),
     ("10", "Lower platen", "MS plate 20 mm"),
     ("11", "Mould tray", "MS sheet 3 mm"),
-    ("12", "Control panels (2x)", "IP54 enclosure"),
-    ("13", "Support frame", "60x60x3 SHS"),
+    ("12", "Shredder control panel (detail A)", "IP54, C1-C9"),
+    ("13", "Heat press control panel (detail B)", "IP54, C10-C19"),
+    ("14", "Support frame", "60x60x3 SHS"),
+    ("15", "Gearbox + motor (assumed)", "Behind housing"),
 ]
-rowh = 45
-w = [90, 700, 450]
-x = NX
-text("PARTS LIST", NX + sum(w) / 2, NY + (len(parts) + 1) * rowh + 40, 40, "TITLE")
-hdr = ("NO.", "DESCRIPTION", "MATERIAL / SPEC")
-rows = [hdr] + parts
-for r, row in enumerate(rows):
-    y = NY + (len(rows) - 1 - r) * rowh
-    cx = NX
-    for c, cell in enumerate(row):
-        rect(cx, y, cx + w[c], y + rowh, "TITLE")
-        text(cell, cx + 15, y + rowh / 2, 24, "TITLE",
-             TextEntityAlignment.MIDDLE_LEFT)
-        cx += w[c]
+table(NX, NY + (len(parts) + 1) * 45, "PARTS LIST", ("NO.", "DESCRIPTION", "MATERIAL / SPEC"),
+      [list(p) for p in parts], [90, 700, 450], rowh=45, th=24)
 
 notes = ("NOTES:\\P"
          "1. ALL DIMENSIONS IN MILLIMETRES.\\P"
          "2. DIMENSIONS ESTIMATED FROM PHOTO - VERIFY BEFORE FABRICATION.\\P"
          "3. FRAME: 60x60x3 SQUARE HOLLOW SECTION, WELDED, PAINTED DARK GREY.\\P"
-         "4. PLATEN WORKING TEMP. 160°C (SET ON TEMP. CONTROLLER).")
+         "4. PLATEN WORKING TEMP. 160°C (SET ON TEMP. CONTROLLER).\\P"
+         "5. BALLOONS = PARTS LIST NO.; C1-C19 = PANEL COMPONENTS.")
 msp.add_mtext(notes, dxfattribs={"layer": "TEXT", "char_height": 24,
-                                 "insert": (NX, NY - 60), "width": 1500})
+                                 "insert": (NX, NY - 60), "width": 1450})
 
 # title block
-BX, BY, BW, BH = 2400, -690, 1300, 260
+BX, BY, BW, BH = 4000, -690, 1300, 260
 rect(BX, BY, BX + BW, BY + BH, "TITLE")
 line(BX, BY + 130, BX + BW, BY + 130, "TITLE")
 line(BX + 800, BY, BX + 800, BY + 130, "TITLE")
 text("PLASTIC SHREDDER & HEAT PRESS PROTOTYPE", BX + BW / 2, BY + 195, 32, "TITLE")
-text("GENERAL ARRANGEMENT - 3 VIEWS", BX + 400, BY + 85, 30, "TITLE")
-text("DRAWN: 2026-11-06", BX + 400, BY + 40, 24, "TITLE")
+text("GA - 3 VIEWS + PANEL DETAILS", BX + 400, BY + 85, 30, "TITLE")
+text("DRAWN: 2026-11-08", BX + 400, BY + 40, 24, "TITLE")
 text("UNITS: mm", BX + 1050, BY + 85, 26, "TITLE")
-text("SCALE 1:20 (A1)", BX + 1050, BY + 40, 26, "TITLE")
+text("1:20 / DETAILS 1:10", BX + 1050, BY + 40, 24, "TITLE")
 
 # drawing border around everything
-rect(-500, -740, 3800, 2900, "TITLE")
+rect(-500, -740, 5400, 3150, "TITLE")
 
-doc.set_modelspace_vport(height=3600, center=(1650, 1200))
+doc.set_modelspace_vport(height=4000, center=(2450, 1205))
 doc.saveas(OUT)
 print("saved", OUT)

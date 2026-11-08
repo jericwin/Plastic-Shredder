@@ -20,6 +20,8 @@ C = dict(
     mould=(168, 170, 173), mould_in=(70, 72, 75), panel=(230, 230, 226),
     plate=(250, 250, 250), red=(205, 35, 35), green=(35, 155, 65),
     yellow=(245, 200, 0), display=(18, 18, 18), black=(25, 25, 25),
+    mplate=(204, 206, 209), rail=(160, 163, 168), mcb=(246, 246, 242),
+    dev=(72, 76, 84), term=(96, 128, 170), sink=(185, 188, 192),
 )
 LAYER_COLOR = {"FRAME": "frame", "SHREDDER": "shred", "BLADES": "blade",
                "PRESS": "press", "HYDRAULIC": "hyd", "ELECTRICAL": "panel",
@@ -36,11 +38,16 @@ doc.layers.add("TEXT", color=7)
 MESHES = []   # (rgb, vertices, faces) - also used for the preview
 PRIMS = []    # primitive list exported for the web viewer
 PART = "frame"
+DOOR = None   # panel id whose hinged door this geometry rides on (web viewer swings it open)
 
 
-def part(name):
-    global PART
-    PART = name
+def part(name, door=None):
+    global PART, DOOR
+    PART, DOOR = name, door
+
+
+def _meta():
+    return {"p": PART, "d": DOOR} if DOOR else {"p": PART}
 
 
 def add(layer, verts, faces, col=None, rec=True):
@@ -48,7 +55,7 @@ def add(layer, verts, faces, col=None, rec=True):
     rgb = C[key]
     if rec:
         PRIMS.append({"t": "m", "v": [list(map(float, q)) for q in verts],
-                      "f": [list(q) for q in faces], "c": key, "p": PART})
+                      "f": [list(q) for q in faces], "c": key, **_meta()})
     mb = MeshBuilder()
     mb.add_mesh(vertices=verts, faces=faces)
     mesh = mb.render_mesh(msp, dxfattribs={"layer": layer})
@@ -63,7 +70,7 @@ def box(x1, y1, z1, x2, y2, z2, layer, col=None):
          (2, 3, 7, 6), (3, 0, 4, 7)]
     add(layer, v, f, col, rec=False)
     PRIMS.append({"t": "b", "b": [x1, y1, z1, x2, y2, z2],
-                  "c": col or LAYER_COLOR[layer], "p": PART})
+                  "c": col or LAYER_COLOR[layer], **_meta()})
 
 
 def frustum(cx, cy, z1, z2, r1, r2, layer, axis="z", n=24, cap=True, col=None):
@@ -81,7 +88,7 @@ def frustum(cx, cy, z1, z2, r1, r2, layer, axis="z", n=24, cap=True, col=None):
         f.append(tuple(range(n, 2 * n)))
     add(layer, v, f, col, rec=False)
     PRIMS.append({"t": "c", "a": axis, "cx": cx, "cy": cy, "z1": z1, "z2": z2, "r1": r1,
-                  "r2": r2, "n": n, "cap": cap, "c": col or LAYER_COLOR[layer], "p": PART})
+                  "r2": r2, "n": n, "cap": cap, "c": col or LAYER_COLOR[layer], **_meta()})
 
 
 def tray(bot, top, z1, z2, layer, bottom=True, col=None):
@@ -95,7 +102,7 @@ def tray(bot, top, z1, z2, layer, bottom=True, col=None):
         f.append((0, 3, 2, 1))
     add(layer, v, f, col, rec=False)
     PRIMS.append({"t": "m", "v": v, "f": [list(q) for q in f],
-                  "c": col or LAYER_COLOR[layer], "p": PART})
+                  "c": col or LAYER_COLOR[layer], **_meta()})
 
 
 def plate_text(s, origin, ux, uy, h, w, txt_h):
@@ -106,7 +113,7 @@ def plate_text(s, origin, ux, uy, h, w, txt_h):
          o + ux * w / 2 + uy * h / 2, o - ux * w / 2 + uy * h / 2]
     add("LABELS", [tuple(q + n * 1) for q in p], [(0, 1, 2, 3)], "plate", rec=False)
     PRIMS.append({"t": "label", "s": s, "o": list(o), "ux": list(ux), "uy": list(uy),
-                  "h": h, "w": w, "th": txt_h, "p": PART})
+                  "h": h, "w": w, "th": txt_h, **_meta()})
     t = msp.add_text(s, height=txt_h, dxfattribs={"layer": "TEXT", "style": "OpenSans"})
     t.set_placement((0, 0), align=TextEntityAlignment.MIDDLE_CENTER)
     t.transform(Matrix44.ucs(ux, uy, n, o + n * 3))
@@ -174,14 +181,51 @@ part("bin")
 tray((240, 140, 720, 560), (230, 130, 730, 570), 330, 570, "BIN_MOLD")
 box(218, 300, 470, 230, 400, 490, "BIN_MOLD", "black")
 box(730, 300, 470, 742, 400, 490, "BIN_MOLD", "black")
-# shredder control box
-part("panels")
-box(-20, -150, 660, 180, 0, 950, "ELECTRICAL")
+# shredder control panel (12): open-front enclosure + hinged door + components C1-C9
+def enclosure(x1, y1, x2, y2, z1, z2, t=3):
+    """Five walls of a wall box; the front (y1) is left open for the door."""
+    box(x1, y2 - t, z1, x2, y2, z2, "ELECTRICAL")                 # back
+    box(x1, y1, z1, x1 + t, y2 - t, z2, "ELECTRICAL")             # sides
+    box(x2 - t, y1, z1, x2, y2 - t, z2, "ELECTRICAL")
+    box(x1 + t, y1, z2 - t, x2 - t, y2 - t, z2, "ELECTRICAL")     # top / bottom
+    box(x1 + t, y1, z1, x2 - t, y2 - t, z1 + t, "ELECTRICAL")
+
+
+part("panel_s")
+enclosure(-20, -135, 180, 0, 660, 950)
+box(-10, -12, 670, 170, -3, 940, "ELECTRICAL", "mplate")          # mounting plate
+box(-5, -20, 863, 165, -12, 897, "ELECTRICAL", "rail")            # DIN rails
+box(-5, -20, 703, 165, -12, 737, "ELECTRICAL", "rail")
+for hz in (700, 905):                                             # hinges (left edge)
+    frustum(-22, -150, hz, hz + 30, 5, 5, "ELECTRICAL", n=10, col="shaft")
+part("panel_s", door="panel_s")
+box(-20, -150, 660, 180, -135, 950, "ELECTRICAL")                 # door
+box(160, -158, 790, 172, -150, 830, "ELECTRICAL", "hyd")          # door lock
+part("c4", door="panel_s")
 add("ELECTRICAL", [(20, -151, 890), (50, -151, 890), (35, -151, 915)], [(0, 1, 2)], "yellow")
+part("c2", door="panel_s")
 frustum(115, 895, -150, -170, 18, 18, "ELECTRICAL", axis="y", n=16, col="green")
+part("c3", door="panel_s")
 frustum(115, 815, -150, -170, 18, 18, "ELECTRICAL", axis="y", n=16, col="red")
+part("c1", door="panel_s")
 frustum(60, 740, -150, -155, 40, 40, "ELECTRICAL", axis="y", n=20, col="yellow")
-box(52, -175, 712, 68, -155, 768, "ELECTRICAL", "red")   # isolator handle
+box(52, -175, 712, 68, -155, 768, "ELECTRICAL", "red")            # isolator handle
+part("c5")                                                        # MCB
+box(5, -80, 835, 41, -20, 925, "ELECTRICAL", "mcb")
+box(17, -90, 872, 29, -80, 890, "ELECTRICAL", "black")
+part("c6")                                                        # contactor
+box(60, -95, 855, 110, -20, 925, "ELECTRICAL", "dev")
+box(75, -97, 900, 95, -95, 915, "ELECTRICAL", "mcb")
+part("c7")                                                        # overload relay
+box(62, -85, 800, 108, -20, 853, "ELECTRICAL", "dev")
+frustum(85, 825, -85, -92, 7, 7, "ELECTRICAL", axis="y", n=12, col="red")
+part("c8")                                                        # terminal block
+for i in range(10):
+    x = 10 + i * 14
+    box(x, -60, 695, x + 12, -20, 745, "ELECTRICAL", "mcb" if i % 4 == 0 else "term")
+part("c9")                                                        # cable glands
+for gx in (32, 82, 132):
+    frustum(gx, -70, 640, 660, 12, 12, "ELECTRICAL", n=12, col="black")
 
 # ---------------- heat press ----------------
 part("lower_platen")
@@ -209,30 +253,61 @@ frustum(1310, 350, 1380, 1395, 130, 130, "HYDRAULIC", col="res")
 hose = msp.add_spline([(1370, 350, 1200), (1450, 350, 1260), (1530, 300, 1180),
                        (1660, 250, 1100)], dxfattribs={"layer": "HYDRAULIC"})
 hose.rgb = C["black"]
-PRIMS.append({"t": "tube", "pts": [[1370, 350, 1200], [1450, 350, 1260], [1530, 300, 1180], [1660, 250, 1100]], "r": 12, "c": "black", "p": PART})
+PRIMS.append({"t": "tube", "pts": [[1370, 350, 1200], [1450, 350, 1260], [1530, 300, 1180], [1660, 250, 1100]], "r": 12, "c": "black", **_meta()})
 # mould tray
 part("mould")
 tray((1060, 120, 1520, 580), (970, 60, 1610, 640), 330, 600, "BIN_MOLD", col="mould")
 for i in range(1, 12):
     x = 1060 + i * 460 / 12
     box(x - 4, 140, 335, x + 4, 560, 350, "BIN_MOLD", "mould_in")
-# press control box
-part("panels")
-box(1730, -100, 790, 1980, 100, 1140, "ELECTRICAL")
+# heat press control panel (13): enclosure + hinged door + components C10-C19
+part("panel_p")
+enclosure(1730, -85, 1980, 100, 790, 1140)
+box(1740, 88, 800, 1970, 97, 1130, "ELECTRICAL", "mplate")
+box(1745, 80, 1038, 1862, 88, 1072, "ELECTRICAL", "rail")
+box(1745, 80, 828, 1965, 88, 862, "ELECTRICAL", "rail")
+for hz in (830, 1070):                                            # hinges (right edge)
+    frustum(1982, -100, hz, hz + 30, 5, 5, "ELECTRICAL", n=10, col="shaft")
+part("panel_p", door="panel_p")
+box(1730, -100, 790, 1980, -85, 1140, "ELECTRICAL")               # door
+box(1738, -108, 940, 1750, -100, 990, "ELECTRICAL", "hyd")        # door lock
+part("c10", door="panel_p")                                       # temperature controller
 box(1800, -110, 1040, 1910, -100, 1110, "ELECTRICAL", "display")
+box(1805, -100, 1045, 1905, -40, 1105, "ELECTRICAL", "dev")       # its body behind the door
 for txt, z, h, c in (("160°", 1085, 22, "red"), ("160°", 1055, 16, "green")):
     t = msp.add_text(txt, height=h, dxfattribs={"layer": "TEXT", "style": "OpenSans"})
     t.set_placement((0, 0), align=TextEntityAlignment.MIDDLE_CENTER)
     t.transform(Matrix44.ucs((1, 0, 0), (0, 0, 1), (0, -1, 0), (1855, -112, z)))
     t.rgb = C[c]
-    PRIMS.append({"t": "led", "s": txt, "o": [1855, -112, z], "th": h, "c": c, "p": PART})
-for i, c in enumerate(("red", "green", "red")):
+    PRIMS.append({"t": "led", "s": txt, "o": [1855, -112, z], "th": h, "c": c, **_meta()})
+for i, (pid, c) in enumerate((("c11", "red"), ("c12", "green"), ("c13", "red"))):
+    part(pid, door="panel_p")
     frustum(1790 + i * 65, 970, -100, -125, 17, 17, "ELECTRICAL", axis="y", n=16, col=c)
+part("c14", door="panel_p")                                       # mode selector
 frustum(1855, 870, -100, -130, 25, 25, "ELECTRICAL", axis="y", n=16, col="black")
-cable = msp.add_spline([(1760, 0, 790), (1740, 50, 720), (1700, 100, 690)],
+box(1851, -134, 850, 1859, -130, 890, "ELECTRICAL", "plate")
+part("c15")                                                       # SSR on heat sink
+box(1870, 50, 990, 1960, 60, 1115, "ELECTRICAL", "sink")
+for fx in range(1872, 1960, 10):
+    box(fx, 60, 990, fx + 3, 88, 1115, "ELECTRICAL", "sink")
+box(1885, 20, 1020, 1945, 50, 1085, "ELECTRICAL", "dev")
+part("c16")                                                       # pump contactor
+box(1805, 5, 1015, 1855, 80, 1095, "ELECTRICAL", "dev")
+box(1820, 3, 1070, 1840, 5, 1085, "ELECTRICAL", "mcb")
+part("c17")                                                       # MCB
+box(1755, 20, 1010, 1791, 80, 1100, "ELECTRICAL", "mcb")
+box(1767, 10, 1047, 1779, 20, 1065, "ELECTRICAL", "black")
+part("c18")                                                       # terminal block
+for i in range(14):
+    x = 1755 + i * 14
+    box(x, 40, 820, x + 12, 80, 870, "ELECTRICAL", "mcb" if i % 4 == 0 else "term")
+part("c19")                                                       # glands + power cable
+for gx in (1762, 1812, 1862):
+    frustum(gx, 0, 770, 790, 12, 12, "ELECTRICAL", n=12, col="black")
+cable = msp.add_spline([(1762, 0, 770), (1740, 50, 720), (1700, 100, 690)],
                        dxfattribs={"layer": "ELECTRICAL"})
 cable.rgb = C["black"]
-PRIMS.append({"t": "tube", "pts": [[1760, 0, 790], [1740, 50, 720], [1700, 100, 690]], "r": 8, "c": "black", "p": PART})
+PRIMS.append({"t": "tube", "pts": [[1762, 0, 770], [1740, 50, 720], [1700, 100, 690]], "r": 8, "c": "black", **_meta()})
 
 # open in a SW isometric view
 vp = doc.viewports.get("*Active")[0]

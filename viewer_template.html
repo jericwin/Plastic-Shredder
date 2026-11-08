@@ -18,6 +18,7 @@
   --stage-2: #C6CDD4;
   --dim: #A84A0A;
   --dim-chip: #FFF8EA;
+  --tag-line: #15181C;
   --focus: #1F6FEB;
   --shadow: 0 6px 24px rgba(20, 26, 33, .14);
   --font-display: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
@@ -30,7 +31,7 @@
     --bg: #0F1215; --surface: #161A1F; --surface-2: #1D2228; --ink: #E3E7EB; --muted: #8B95A0;
     --line: #2A3139; --accent: #F5C021; --accent-ink: #15181C;
     --accent-soft: rgba(245, 192, 33, .15); --stage-1: #2B323A; --stage-2: #0D1013;
-    --dim: #F5C021; --dim-chip: #191D22; --focus: #58A6FF; --shadow: 0 6px 24px rgba(0, 0, 0, .45);
+    --dim: #F5C021; --dim-chip: #191D22; --tag-line: #E3E7EB; --focus: #58A6FF; --shadow: 0 6px 24px rgba(0, 0, 0, .45);
     color-scheme: dark;
   }
 }
@@ -38,7 +39,7 @@
   --bg: #0F1215; --surface: #161A1F; --surface-2: #1D2228; --ink: #E3E7EB; --muted: #8B95A0;
   --line: #2A3139; --accent: #F5C021; --accent-ink: #15181C;
   --accent-soft: rgba(245, 192, 33, .15); --stage-1: #2B323A; --stage-2: #0D1013;
-  --dim: #F5C021; --dim-chip: #191D22; --focus: #58A6FF; --shadow: 0 6px 24px rgba(0, 0, 0, .45);
+  --dim: #F5C021; --dim-chip: #191D22; --tag-line: #E3E7EB; --focus: #58A6FF; --shadow: 0 6px 24px rgba(0, 0, 0, .45);
   color-scheme: dark;
 }
 
@@ -230,6 +231,31 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .mlist button { grid-row: 1 / 3; grid-column: 3; }
 .steps { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13.5px; display: flex; flex-direction: column; gap: 4px; }
 kbd { font: 500 11px var(--font-mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; background: var(--surface); color: var(--ink); }
+/* numbered part tags: balloon + straight leader with an arrow on the part */
+#tagSvg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+#tagSvg line { stroke: var(--tag-line); stroke-width: 1.4; }
+#tagSvg path { fill: var(--tag-line); }
+.tag {
+  position: absolute; left: 0; top: 0; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%;
+  display: grid; place-items: center; padding: 0; cursor: pointer; pointer-events: auto;
+  font: 500 12px/1 var(--font-mono); font-variant-numeric: tabular-nums;
+  background: var(--surface); color: var(--ink); border: 1.5px solid var(--tag-line);
+  box-shadow: 0 1px 4px rgba(0,0,0,.18); will-change: transform;
+}
+.tag.comp { width: 30px; height: 30px; margin: -15px 0 0 -15px; font-size: 10.5px; border-style: solid; background: var(--dim-chip); }
+.tag:hover, .tag.sel { background: var(--accent); color: var(--accent-ink); border-color: var(--accent-ink); }
+.parts .sub { list-style: none; margin: 0 0 6px; padding: 0 0 0 30px; flex-basis: 100%; min-width: 0; }
+.parts .sub > li { border-left: 2px solid var(--line); padding-left: 6px; }
+.parts li.has-sub { flex-wrap: wrap; }
+.parts .sub li { border-bottom: 0; }
+.parts .sub .part-row { padding: 5px 4px; font-size: 13.5px; }
+.parts .sub .no { width: 30px; }
+.where { margin-left: auto; flex: none; font: 600 10px var(--font-display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+.twist { border: 0; background: none; padding: 6px; cursor: pointer; color: var(--muted); border-radius: 5px; flex: none; }
+.twist:hover { color: var(--ink); background: var(--surface-2); }
+.twist svg { width: 16px; height: 16px; display: block; transition: transform .15s; }
+.twist[aria-expanded="true"] svg { transform: rotate(90deg); }
+.loc { margin: 0; font-size: 12.5px; color: var(--muted); }
 .note { font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 12px; margin: 0; }
 
 /* ---------- phones: rail becomes a bottom sheet ---------- */
@@ -278,7 +304,7 @@ kbd { font: 500 11px var(--font-mono); border: 1px solid var(--line); border-bot
 <main class="app">
   <section id="stage" aria-label="3D model">
     <canvas id="c"></canvas>
-    <div id="labels"></div>
+    <div id="labels"><svg id="tagSvg" aria-hidden="true"></svg></div>
     <div id="tip" hidden></div>
     <div class="hud hud-tl">
       <span class="pill mode" id="modePill" hidden>Measuring</span>
@@ -291,7 +317,9 @@ kbd { font: 500 11px var(--font-mono); border: 1px solid var(--line); border-bot
       <button class="tool" id="tMeasure" aria-pressed="false" title="Measure between two points (M)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 16.5L16.5 3 21 7.5 7.5 21z"/><path d="M7 12.5l2 2M10 9.5l2 2M13 6.5l2 2"/></svg>Measure</button>
       <span class="sep"></span>
-      <button class="tool" id="tDims" aria-pressed="true" title="Show main dimensions">
+      <button class="tool" id="tTags" aria-pressed="true" title="Show part number tags (T)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="7" cy="7" r="4"/><path d="M10 10l9 9M19 19l-4-.5M19 19l-.5-4"/></svg>Tags</button>
+      <button class="tool" id="tDims" aria-pressed="false" title="Show main dimensions">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 8v8M21 8v8M3 12h18M6 9.5L3 12l3 2.5M18 9.5l3 2.5-3 2.5"/></svg>Dims</button>
       <button class="tool" id="tExplode" aria-pressed="false" title="Explode the assembly">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="8" y="8" width="8" height="8"/><path d="M4 4l2.5 2.5M20 4l-2.5 2.5M4 20l2.5-2.5M20 20l-2.5-2.5"/></svg>Explode</button>
@@ -320,6 +348,7 @@ kbd { font: 500 11px var(--font-mono); border: 1px solid var(--line); border-bot
           <div>
             <h2 id="selName">Part</h2>
             <p class="spec" id="selSpec"></p>
+            <p class="loc" id="selLoc" hidden></p>
           </div>
         </div>
         <div class="sizes">
@@ -331,9 +360,10 @@ kbd { font: 500 11px var(--font-mono); border: 1px solid var(--line); border-bot
           <button class="btn primary" id="selZoom">Zoom to</button>
           <button class="btn" id="selIso">Isolate</button>
           <button class="btn" id="selHide">Hide</button>
+          <button class="btn" id="selDoor" hidden>Open door</button>
         </div>
       </div>
-      <p class="hint" id="selHint">Click a part in the model or in the list to see its size and material.</p>
+      <p class="hint" id="selHint">Click a part, a number tag or a row in the list. Panels 12 and 13 open to show C1–C19, the parts on and inside each control panel.</p>
       <div>
         <p class="label">Parts list</p>
         <ul class="parts" id="partList"></ul>
@@ -380,12 +410,14 @@ kbd { font: 500 11px var(--font-mono); border: 1px solid var(--line); border-bot
       </div>
       <div class="group">
         <label class="switch" for="oEdges"><span>Outline edges</span><input type="checkbox" id="oEdges" checked></label>
-        <label class="switch" for="oDims"><span>Main dimensions</span><input type="checkbox" id="oDims" checked></label>
+        <label class="switch" for="oTags"><span>Part number tags</span><input type="checkbox" id="oTags" checked></label>
+        <label class="switch" for="oDoors"><span>Open control panel doors</span><input type="checkbox" id="oDoors"></label>
+        <label class="switch" for="oDims"><span>Main dimensions</span><input type="checkbox" id="oDims"></label>
         <label class="switch" for="oGrid"><span>Floor grid (100 mm)</span><input type="checkbox" id="oGrid" checked></label>
         <label class="switch" for="oShadow"><span>Shadows</span><input type="checkbox" id="oShadow" checked></label>
       </div>
       <div class="slider">
-        <div class="top-line"><label for="explode">Exploded view</label><output id="explodeOut">0%</output></div>
+        <div class="top-line"><label for="explode">Exploded view (also opens panel doors)</label><output id="explodeOut">0%</output></div>
         <input type="range" id="explode" min="0" max="100" value="0">
       </div>
       <div class="group">
@@ -417,24 +449,52 @@ if (!window.THREE || !THREE.OrbitControls || !DATA) {
   return;
 }
 
-/* ---------- parts (numbers match the AutoCAD parts list) ---------- */
+/* ---------- parts (numbers match the balloons and parts list on the AutoCAD drawing) ----------
+   tag.at = point on the part the arrow touches (CAD mm), tag.dir = which way the balloon sits */
 const PARTS = [
-  { id: "hopper", no: 1, name: "Shredder hopper", spec: "MS sheet 3 mm", ex: [0, 0, 430] },
-  { id: "cutters", no: 2, name: "Twin-shaft cutters", spec: "2 × 14 hook blades, tool steel", ex: [0, -720, 0] },
-  { id: "housing", no: 3, name: "Shredder housing", spec: "MS plate 6 mm", ex: [0, 0, 0] },
-  { id: "chute", no: 4, name: "Discharge chute", spec: "MS sheet 2 mm", ex: [0, -380, 90] },
-  { id: "bin", no: 5, name: "Collection bin", spec: "MS sheet 2 mm", ex: [0, -820, 0] },
-  { id: "hydraulic", no: 6, name: "Hydraulic cylinder + ram", spec: "Ø120 cylinder, Ø80 ram, oil tank on top", ex: [0, 0, 620] },
-  { id: "crown", no: 7, name: "Crown plate", spec: "MS plate 25 mm", ex: [0, 0, 400] },
-  { id: "pillars", no: 8, name: "Guide pillars (4×)", spec: "Ø50 C45 shaft", ex: [0, 0, 0] },
-  { id: "upper_platen", no: 9, name: "Upper heated platen", spec: "Al / MS with heaters, 160 °C", ex: [0, 0, 180] },
-  { id: "lower_platen", no: 10, name: "Lower platen", spec: "MS plate 20 mm", ex: [0, 0, 0] },
-  { id: "mould", no: 11, name: "Mould tray", spec: "MS sheet 3 mm", ex: [0, -860, 0] },
-  { id: "panels", no: 12, name: "Control panels (2×)", spec: "IP54 enclosures", ex: null },
-  { id: "frame", no: 13, name: "Support frame", spec: "60 × 60 × 3 SHS, welded", ex: [0, 0, 0] },
-  { id: "drive", no: 14, name: "Gearbox + motor", spec: "Assumed position, not visible in the photo", ex: [320, 0, 0] },
+  { id: "hopper", no: 1, name: "Shredder hopper", spec: "MS sheet 3 mm", ex: [0, 0, 430], tag: { at: [200, 45, 1290], dir: [-1, -0.6, 0.8] } },
+  { id: "cutters", no: 2, name: "Twin-shaft cutters", spec: "2 × 14 hook blades, tool steel", ex: [0, -720, 0], tag: { at: [450, 230, 770], dir: [0.3, -1, -0.6] } },
+  { id: "housing", no: 3, name: "Shredder housing", spec: "MS plate 6 mm", ex: [0, 0, 0], tag: { at: [760, 100, 1010], dir: [0.3, -1, 0.9] } },
+  { id: "chute", no: 4, name: "Discharge chute", spec: "MS sheet 2 mm", ex: [0, -380, 90], tag: { at: [870, 300, 790], dir: [0.2, -1, -0.4] } },
+  { id: "bin", no: 5, name: "Collection bin", spec: "MS sheet 2 mm", ex: [0, -820, 0], tag: { at: [600, 130, 450], dir: [0.2, -1, -0.5] } },
+  { id: "hydraulic", no: 6, name: "Hydraulic cylinder + ram", spec: "Ø120 cylinder, Ø80 ram, oil tank on top", ex: [0, 0, 620], tag: { at: [1310, 290, 1170], dir: [0, -0.6, 1] } },
+  { id: "crown", no: 7, name: "Crown plate", spec: "MS plate 25 mm", ex: [0, 0, 400], tag: { at: [960, 50, 1060], dir: [-0.4, -0.8, 0.8] } },
+  { id: "pillars", no: 8, name: "Guide pillars (4×)", spec: "Ø50 C45 shaft", ex: [0, 0, 0], tag: { at: [1640, 75, 950], dir: [0.6, -1, 0.3] } },
+  { id: "upper_platen", no: 9, name: "Upper heated platen", spec: "Al / MS with heaters, 160 °C", ex: [0, 0, 180], tag: { at: [1100, 50, 860], dir: [-0.3, -1, 0.1] } },
+  { id: "lower_platen", no: 10, name: "Lower platen", spec: "MS plate 20 mm", ex: [0, 0, 0], tag: { at: [1500, 50, 720], dir: [0.3, -1, -0.2] } },
+  { id: "mould", no: 11, name: "Mould tray", spec: "MS sheet 3 mm", ex: [0, -860, 0], tag: { at: [1300, 75, 560], dir: [0.2, -1, -0.6] } },
+  { id: "panel_s", no: 12, name: "Shredder control panel", spec: "IP54 enclosure · components C1–C9", ex: [-360, -260, 0], tag: { at: [-20, -75, 900], dir: [-1, -0.3, 0.5] } },
+  { id: "panel_p", no: 13, name: "Heat press control panel", spec: "IP54 enclosure · components C10–C19", ex: [360, -260, 0], tag: { at: [1980, 0, 1100], dir: [1, -0.3, 0.5] } },
+  { id: "frame", no: 14, name: "Support frame", spec: "60 × 60 × 3 SHS, welded", ex: [0, 0, 0], tag: { at: [30, 0, 450], dir: [-1, -0.6, -0.3] } },
+  { id: "drive", no: 15, name: "Gearbox + motor", spec: "Assumed position, not visible in the photo", ex: [320, 0, 0], tag: { at: [1080, 400, 820], dir: [0.6, 0, 1] } },
 ];
-const PART = Object.fromEntries(PARTS.map((p) => [p.id, p]));
+/* what is on (door) and inside each control panel; "inside" parts are typical wiring, assumed */
+const COMPONENTS = [
+  { id: "c1", no: "C1", parent: "panel_s", where: "door", name: "Main isolator switch", spec: "Rotary, lockable, yellow / red", dir: [-1, -0.4, -0.6] },
+  { id: "c2", no: "C2", parent: "panel_s", where: "door", name: "ON push button", spec: "Green, starts the shredder", dir: [-0.6, -1, 0.5] },
+  { id: "c3", no: "C3", parent: "panel_s", where: "door", name: "OFF push button", spec: "Red, stops the shredder", dir: [-0.8, -1, 0] },
+  { id: "c4", no: "C4", parent: "panel_s", where: "door", name: "Warning label", spec: "Electrical hazard sign", dir: [-1, -0.5, 0.9] },
+  { id: "c5", no: "C5", parent: "panel_s", where: "inside", name: "Circuit breaker (MCB)", spec: "Motor supply protection", dir: [-1, -0.6, 0.7] },
+  { id: "c6", no: "C6", parent: "panel_s", where: "inside", name: "Motor contactor", spec: "Switches the shredder motor", dir: [0.2, -1, 0.9] },
+  { id: "c7", no: "C7", parent: "panel_s", where: "inside", name: "Thermal overload relay", spec: "Trips on motor overload", dir: [0.6, -1, 0] },
+  { id: "c8", no: "C8", parent: "panel_s", where: "inside", name: "Terminal block", spec: "On DIN rail", dir: [-0.6, -1, -0.6] },
+  { id: "c9", no: "C9", parent: "panel_s", where: "bottom", name: "Cable glands", spec: "Power in, motor out", dir: [0, -0.6, -1] },
+  { id: "c10", no: "C10", parent: "panel_p", where: "door", name: "Temperature controller", spec: "PID, platen set to 160 °C", dir: [-0.2, -1, 1] },
+  { id: "c11", no: "C11", parent: "panel_p", where: "door", name: "STOP push button", spec: "Red", dir: [-0.6, -1, -0.3] },
+  { id: "c12", no: "C12", parent: "panel_p", where: "door", name: "START push button", spec: "Green", dir: [0, -1, 0.5] },
+  { id: "c13", no: "C13", parent: "panel_p", where: "door", name: "HEAT push button / lamp", spec: "Red", dir: [0.8, -1, 0.2] },
+  { id: "c14", no: "C14", parent: "panel_p", where: "door", name: "MODE selector switch", spec: "Manual / auto", dir: [0.4, -1, -0.8] },
+  { id: "c15", no: "C15", parent: "panel_p", where: "inside", name: "Solid-state relay (SSR)", spec: "Switches the platen heaters, on heat sink", dir: [1, -0.6, 0.7] },
+  { id: "c16", no: "C16", parent: "panel_p", where: "inside", name: "Hydraulic pump contactor", spec: "Switches the pump motor", dir: [0.1, -1, 0.9] },
+  { id: "c17", no: "C17", parent: "panel_p", where: "inside", name: "Circuit breaker (MCB)", spec: "Supply protection", dir: [-0.8, -1, 0.6] },
+  { id: "c18", no: "C18", parent: "panel_p", where: "inside", name: "Terminal block", spec: "On DIN rail", dir: [0.6, -1, -0.6] },
+  { id: "c19", no: "C19", parent: "panel_p", where: "bottom", name: "Cable glands + power cable", spec: "Power, heaters, thermocouple", dir: [0.3, -0.6, -1] },
+];
+/* hinged doors: pivot = hinge line (CAD x, y), ang = how far it swings open (degrees, about the vertical) */
+const DOORS = { panel_s: { pivot: [-20, -150], ang: -110 }, panel_p: { pivot: [1980, -100], ang: 110 } };
+const ALL_PARTS = PARTS.concat(COMPONENTS);
+const PART = Object.fromEntries(ALL_PARTS.map((p) => [p.id, p]));
+const mainOf = (id) => (id && PART[id] && PART[id].parent) || id;
 
 /* ---------- coordinates: CAD (X length, Y depth, Z up) -> three (x, y up, z toward viewer) ---------- */
 const CX = 980, CY = 350;
@@ -527,6 +587,7 @@ scene.add(model);
 const meshes = [];
 const partMeshes = {};
 
+let curDoor = null;
 function addMesh(geo, keyName, part, opts = {}) {
   const mat = opts.mat || material(keyName);
   const m = new THREE.Mesh(geo, mat);
@@ -534,7 +595,7 @@ function addMesh(geo, keyName, part, opts = {}) {
   if (opts.quat) m.quaternion.copy(opts.quat);
   m.castShadow = opts.shadow !== false;
   m.receiveShadow = true;
-  m.userData = { part, base: m.position.clone() };
+  m.userData = { part, base: m.position.clone(), baseQuat: m.quaternion.clone(), door: curDoor };
   if (opts.edges !== false) {
     const e = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 25), edgeMat);
     e.raycast = () => {};
@@ -582,6 +643,7 @@ function textTexture(text, w, h, o) {
 
 function build() {
   for (const p of DATA.prims) {
+    curDoor = p.d || null;
     if (p.t === "b") {
       const [x1, y1, z1, x2, y2, z2] = p.b;
       const geo = new THREE.BoxGeometry(Math.abs(x2 - x1), Math.abs(z2 - z1), Math.abs(y2 - y1));
@@ -629,12 +691,14 @@ function build() {
   }
   /* explode directions */
   for (const m of meshes) {
-    const def = PART[m.userData.part];
+    const def = PART[mainOf(m.userData.part)];
     let ex = def && def.ex;
     if (!ex) ex = m.userData.base.x + CX < 900 ? [-340, -260, 0] : [340, -260, 0];
     m.userData.ex = V(...ex);
   }
 }
+
+for (const id in DOORS) DOORS[id].pivotV = P(DOORS[id].pivot[0], DOORS[id].pivot[1], 0);
 
 /* ---------- theme-aware colours read from CSS tokens ---------- */
 function token(name) {
@@ -662,7 +726,8 @@ function applyTheme() {
 
 /* ---------- state ---------- */
 const state = {
-  mode: "select", units: "mm", render: "solid", edges: true, dims: true, grid: true, shadows: true,
+  mode: "select", units: "mm", render: "solid", edges: true, dims: false, tags: true, grid: true, shadows: true,
+  door: { panel_s: 0, panel_p: 0 }, doorTarget: { panel_s: 0, panel_p: 0 },
   rotate: false, explode: 0, section: false, sAxis: "y", sPos: 500, snap: true,
   selected: null, hover: null, hidden: new Set(),
 };
@@ -810,9 +875,9 @@ function refreshAppearance() {
   for (const m of meshes) {
     const mat = m.material;
     const p = m.userData.part;
-    m.visible = !state.hidden.has(p);
+    m.visible = !state.hidden.has(p) && !state.hidden.has(mainOf(p));
     if (mat.isMeshStandardMaterial) {
-      const isSel = p === sel, isHov = p === hov && !isSel;
+      const isSel = p === sel || mainOf(p) === sel, isHov = (p === hov || mainOf(p) === hov) && !isSel;
       mat.emissive.copy(accentLinear).multiplyScalar(isSel ? 0.32 : isHov ? 0.14 : 0);
       const xray = state.render === "xray" && !isSel;
       mat.transparent = xray;
@@ -829,8 +894,19 @@ function refreshAppearance() {
   ground.visible = state.shadows;
   key.castShadow = state.shadows;
 }
+const UP = new THREE.Vector3(0, 1, 0), dq = new THREE.Quaternion();
+function doorAmount(id) { return Math.max(state.explode, state.door[id] || 0); }
 function applyExplode() {
-  for (const m of meshes) m.position.copy(m.userData.base).addScaledVector(m.userData.ex, state.explode);
+  for (const m of meshes) {
+    const u = m.userData;
+    if (u.door) {
+      /* swing the door about its hinge line, then move with the rest of the panel */
+      const D = DOORS[u.door];
+      dq.setFromAxisAngle(UP, THREE.MathUtils.degToRad(D.ang) * Math.min(1, doorAmount(u.door) * 1.25));
+      m.position.copy(u.base).sub(D.pivotV).applyQuaternion(dq).add(D.pivotV).addScaledVector(u.ex, state.explode);
+      m.quaternion.copy(dq).multiply(u.baseQuat);
+    } else m.position.copy(u.base).addScaledVector(u.ex, state.explode);
+  }
   $("explodeOut").textContent = Math.round(state.explode * 100) + "%";
   $("explode").value = Math.round(state.explode * 100);
   $("tExplode").setAttribute("aria-pressed", state.explode > 0.001);
@@ -880,7 +956,8 @@ function pick(ev) {
   const hits = ray.intersectObjects(meshes.filter((m) => m.visible), false);
   for (const h of hits) {
     if (clipped(h.point)) continue;
-    if (state.render === "xray" && h.object.userData.part !== state.selected && state.selected) continue;
+    const hp = h.object.userData.part;
+    if (state.render === "xray" && state.selected && hp !== state.selected && mainOf(hp) !== state.selected) continue;
     return h;
   }
   return null;
@@ -982,14 +1059,22 @@ function cancelPending() {
 }
 
 /* ---------- selection UI ---------- */
-function partBox(id) {
+function meshesOf(id) {
+  let list = (partMeshes[id] || []).slice();
+  for (const c of COMPONENTS) if (c.parent === id) list = list.concat(partMeshes[c.id] || []);
+  return list;
+}
+function partBox(id, current) {
   const box = new THREE.Box3();
-  for (const m of partMeshes[id] || []) {
-    const saved = m.position.clone();
+  for (const m of meshesOf(id)) {
+    if (current) { if (m.visible) box.expandByObject(m); continue; }
+    const saved = m.position.clone(), savedQ = m.quaternion.clone();
     m.position.copy(m.userData.base);
+    m.quaternion.copy(m.userData.baseQuat);
     m.updateMatrixWorld(true);
     box.expandByObject(m);
     m.position.copy(saved);
+    m.quaternion.copy(savedQ);
     m.updateMatrixWorld(true);
   }
   return box;
@@ -1010,16 +1095,44 @@ function select(id) {
     $("selD").textContent = fmt(s.z);
     $("selH").textContent = fmt(s.y);
     $("selHide").textContent = state.hidden.has(id) ? "Show" : "Hide";
+    const panel = DOORS[mainOf(id)] ? mainOf(id) : null;
+    $("selLoc").hidden = !p.parent;
+    if (p.parent) {
+      const where = { door: "on the door", inside: "inside, assumed (typical wiring, not visible in the photo)", bottom: "under the box" }[p.where];
+      $("selLoc").textContent = `Part of ${PART[p.parent].no} · ${PART[p.parent].name}, ${where}`;
+    }
+    $("selDoor").hidden = !panel;
+    if (panel) {
+      if (p.where === "inside" || p.where === "bottom") setDoor(panel, true);
+      expandPanel(panel, true);
+      refreshDoorBtn();
+    }
     showTab("parts");
   }
   refreshAppearance();
+}
+function setDoor(id, open) {
+  state.doorTarget[id] = open ? 1 : 0;
+  if (reduceMotion) { state.door[id] = state.doorTarget[id]; applyExplode(); }
+  $("oDoors").checked = Object.values(state.doorTarget).some((v) => v > 0);
+  refreshDoorBtn();
+}
+function refreshDoorBtn() {
+  const panel = state.selected && DOORS[mainOf(state.selected)] ? mainOf(state.selected) : null;
+  if (panel) $("selDoor").textContent = state.doorTarget[panel] ? "Close door" : "Open door";
+}
+function expandPanel(id, open) {
+  const li = document.querySelector(`#partList li[data-part="${id}"]`);
+  if (!li || !li.querySelector(".sub")) return;
+  li.querySelector(".sub").hidden = !open;
+  li.querySelector(".twist").setAttribute("aria-expanded", String(open));
 }
 function setHidden(id, hide) {
   if (hide) state.hidden.add(id); else state.hidden.delete(id);
   const li = document.querySelector(`#partList li[data-part="${id}"]`);
   if (li) {
     li.classList.toggle("off", hide);
-    const eye = li.querySelector(".eye");
+    const eye = li.querySelector(":scope > .eye");
     eye.innerHTML = eyeIcon(!hide);
     eye.setAttribute("aria-label", `${hide ? "Show" : "Hide"} ${PART[id].name}`);
     eye.setAttribute("aria-pressed", String(!hide));
@@ -1032,28 +1145,162 @@ function eyeIcon(open) {
     ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>'
     : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4M6.6 6.6C3.9 8.4 2 12 2 12s3.6 7 10 7c1.8 0 3.4-.5 4.7-1.3"/></svg>';
 }
+function partRow(p) {
+  const li = document.createElement("li");
+  li.dataset.part = p.id;
+  const row = document.createElement("button");
+  row.className = "part-row";
+  row.innerHTML = `<span class="no">${p.no}</span><span class="pname"></span>`;
+  row.querySelector(".pname").textContent = p.name;
+  if (p.where) {
+    const w = document.createElement("span");
+    w.className = "where";
+    w.textContent = p.where;
+    row.appendChild(w);
+  }
+  row.onclick = () => select(state.selected === p.id ? null : p.id);
+  row.onmouseenter = () => { state.hover = p.id; refreshAppearance(); };
+  row.onmouseleave = () => { state.hover = null; refreshAppearance(); };
+  const eye = document.createElement("button");
+  eye.className = "eye";
+  eye.innerHTML = eyeIcon(true);
+  eye.setAttribute("aria-label", `Hide ${p.name}`);
+  eye.setAttribute("aria-pressed", "true");
+  eye.onclick = () => setHidden(p.id, !state.hidden.has(p.id));
+  li.append(row, eye);
+  return li;
+}
 function buildPartList() {
   const ul = $("partList");
   for (const p of PARTS) {
     if (!partMeshes[p.id]) continue;
-    const li = document.createElement("li");
-    li.dataset.part = p.id;
-    const row = document.createElement("button");
-    row.className = "part-row";
-    row.innerHTML = `<span class="no">${p.no}</span><span class="pname"></span>`;
-    row.querySelector(".pname").textContent = p.name;
-    row.onclick = () => select(state.selected === p.id ? null : p.id);
-    row.onmouseenter = () => { state.hover = p.id; refreshAppearance(); };
-    row.onmouseleave = () => { state.hover = null; refreshAppearance(); };
-    const eye = document.createElement("button");
-    eye.className = "eye";
-    eye.innerHTML = eyeIcon(true);
-    eye.setAttribute("aria-label", `Hide ${p.name}`);
-    eye.setAttribute("aria-pressed", "true");
-    eye.onclick = () => setHidden(p.id, !state.hidden.has(p.id));
-    li.append(row, eye);
+    const li = partRow(p);
+    const kids = COMPONENTS.filter((c) => c.parent === p.id && partMeshes[c.id]);
+    if (kids.length) {
+      li.classList.add("has-sub");
+      const tw = document.createElement("button");
+      tw.className = "twist";
+      tw.setAttribute("aria-expanded", "false");
+      tw.setAttribute("aria-label", `Show what is on and inside the ${p.name.toLowerCase()}`);
+      tw.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
+      tw.onclick = () => expandPanel(p.id, tw.getAttribute("aria-expanded") !== "true");
+      li.insertBefore(tw, li.firstChild);
+      const sub = document.createElement("ul");
+      sub.className = "sub";
+      sub.hidden = true;
+      for (const c of kids) sub.appendChild(partRow(c));
+      li.appendChild(sub);
+    }
     ul.appendChild(li);
   }
+}
+
+/* ---------- part number tags: balloon + straight leader + arrow on the part ---------- */
+const SVGNS = "http://www.w3.org/2000/svg";
+const tagSvg = $("tagSvg");
+tagSvg.innerHTML = '<defs><marker id="tagArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker></defs>';
+const tags = [];
+const meshCenter = new Map();
+function buildTags() {
+  for (const p of ALL_PARTS) {
+    if (!partMeshes[p.id]) continue;
+    const el = document.createElement("button");
+    el.className = "tag" + (p.parent ? " comp" : "");
+    el.textContent = p.no;
+    el.setAttribute("aria-label", `${p.no} ${p.name}`);
+    el.title = `${p.no} · ${p.name}`;
+    el.onclick = () => select(state.selected === p.id ? null : p.id);
+    el.onmouseenter = () => { state.hover = p.id; refreshAppearance(); };
+    el.onmouseleave = () => { state.hover = null; refreshAppearance(); };
+    labelLayer.appendChild(el);
+    const ln = document.createElementNS(SVGNS, "line");
+    ln.setAttribute("marker-end", "url(#tagArrow)");
+    tagSvg.appendChild(ln);
+    const def = p.tag || {};
+    const ex = partMeshes[mainOf(p.id)] ? partMeshes[mainOf(p.id)][0].userData.ex : new THREE.Vector3();
+    tags.push({ p, el, ln, at: def.at ? P(...def.at) : null, ex, dir: V(...(def.dir || p.dir || [0, -1, 0])).normalize(),
+      a: new THREE.Vector3(), sx: 0, sy: 0, ax: 0, ay: 0, show: false });
+    for (const m of partMeshes[p.id]) {
+      m.geometry.computeBoundingBox();
+      meshCenter.set(m, m.geometry.boundingBox.getCenter(new THREE.Vector3()));
+    }
+  }
+}
+function tagVisible(t) {
+  const p = t.p;
+  if (!state.tags || state.hidden.has(p.id) || state.hidden.has(mainOf(p.id))) return false;
+  if (!p.parent) return true;
+  const sel = state.selected;
+  const focus = sel === p.parent || mainOf(sel) === p.parent;
+  /* component tags only for the panel in focus (selected) or whose door was opened */
+  const opened = state.doorTarget[p.parent] > 0;
+  if (p.where === "door") return focus || opened;
+  return (focus || opened) && (doorAmount(p.parent) > 0.6 || state.render === "xray");
+}
+const tv = new THREE.Vector3(), tv2 = new THREE.Vector3();
+function toScreen(v, w, h) {
+  tv.copy(v).project(camera);
+  return { x: (tv.x * 0.5 + 0.5) * w, y: (-tv.y * 0.5 + 0.5) * h, ok: tv.z < 1 && tv.z > -1 };
+}
+function updateTags() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  const live = [];
+  for (const t of tags) {
+    t.show = tagVisible(t);
+    if (!t.show) continue;
+    if (t.at) t.a.copy(t.at).addScaledVector(t.ex, state.explode);
+    else {
+      /* components: centre of their meshes where they are now (doors swing) */
+      t.a.set(0, 0, 0);
+      let n = 0;
+      for (const m of partMeshes[t.p.id]) { t.a.add(tv2.copy(meshCenter.get(m)).applyMatrix4(m.matrixWorld)); n++; }
+      t.a.multiplyScalar(1 / n);
+    }
+    const s0 = toScreen(t.a, w, h);
+    if (!s0.ok || s0.x < 0 || s0.y < 0 || s0.x > w || s0.y > h) { t.show = false; continue; }
+    const s1 = toScreen(tv2.copy(t.a).addScaledVector(t.dir, 200), w, h);
+    const dx = s1.x - s0.x, dy = s1.y - s0.y;
+    const L = Math.hypot(dx, dy) || 1;
+    const len = t.p.parent ? 48 : 62;
+    t.ax = s0.x; t.ay = s0.y;
+    t.sx = s0.x + (dx / L) * len; t.sy = s0.y + (dy / L) * len;
+    live.push(t);
+  }
+  /* push overlapping balloons apart */
+  for (let it = 0; it < 8; it++) {
+    for (let i = 0; i < live.length; i++) {
+      for (let j = i + 1; j < live.length; j++) {
+        const A = live[i], B = live[j];
+        const min = (A.p.parent ? 15 : 13) + (B.p.parent ? 15 : 13) + 4;
+        let dx = B.sx - A.sx, dy = B.sy - A.sy;
+        const d = Math.hypot(dx, dy);
+        if (d >= min) continue;
+        if (d < 0.01) { dx = 1; dy = 0; } else { dx /= d; dy /= d; }
+        const push = (min - d) / 2;
+        A.sx -= dx * push; A.sy -= dy * push; B.sx += dx * push; B.sy += dy * push;
+      }
+    }
+  }
+  for (const t of tags) {
+    t.el.hidden = !t.show;
+    t.ln.style.display = t.show ? "" : "none";
+    if (!t.show) continue;
+    const r = t.p.parent ? 15 : 13;
+    t.sx = Math.min(Math.max(t.sx, r + 2), w - r - 2);
+    t.sy = Math.min(Math.max(t.sy, r + 2), h - r - 2);
+    t.el.style.transform = `translate(${t.sx}px, ${t.sy}px)`;
+    t.el.classList.toggle("sel", state.selected === t.p.id);
+    const dx = t.ax - t.sx, dy = t.ay - t.sy, L = Math.hypot(dx, dy) || 1;
+    t.ln.setAttribute("x1", t.sx + (dx / L) * r);
+    t.ln.setAttribute("y1", t.sy + (dy / L) * r);
+    t.ln.setAttribute("x2", t.ax);
+    t.ln.setAttribute("y2", t.ay);
+  }
+}
+function setTags(on) {
+  state.tags = on;
+  $("tTags").setAttribute("aria-pressed", on);
+  $("oTags").checked = on;
 }
 
 /* ---------- modes ---------- */
@@ -1163,6 +1410,13 @@ document.querySelectorAll(".views button").forEach((b) => (b.onclick = () => set
 $("tSelect").onclick = () => setMode("select");
 $("tMeasure").onclick = () => setMode(state.mode === "measure" ? "select" : "measure");
 $("tDims").onclick = () => setDims(!state.dims);
+$("tTags").onclick = () => setTags(!state.tags);
+$("oTags").onchange = (e) => setTags(e.target.checked);
+$("oDoors").onchange = (e) => { for (const id in DOORS) setDoor(id, e.target.checked); };
+$("selDoor").onclick = () => {
+  const panel = mainOf(state.selected);
+  if (DOORS[panel]) setDoor(panel, !state.doorTarget[panel]);
+};
 $("oDims").onchange = (e) => setDims(e.target.checked);
 $("tExplode").onclick = () => animateExplode(state.explode > 0.001 ? 0 : 1);
 $("explode").oninput = (e) => { explodeAnim = null; state.explode = e.target.value / 100; applyExplode(); };
@@ -1193,16 +1447,31 @@ document.querySelectorAll("#units button").forEach((b) => (b.onclick = () => {
   if (state.selected) select(state.selected);
 }));
 $("mClear").onclick = () => { while (measurements.length) removeMeasurement(measurements[0]); cancelPending(); };
-$("selZoom").onclick = () => state.selected && fitCurrent(partBox(state.selected));
+$("selZoom").onclick = () => {
+  const sel = state.selected;
+  if (!sel) return;
+  if (!PART[sel].parent) { fitCurrent(partBox(sel, true)); return; }
+  /* panel components: frame the whole panel from the front so the walls don't block the view */
+  const box = partBox(PART[sel].parent, true);
+  const sphere = box.getBoundingSphere(new THREE.Sphere());
+  const dir = new THREE.Vector3(PART[sel].parent === "panel_s" ? -0.35 : 0.35, 0.3, 1).normalize();
+  flyTo(sphere.center.clone().addScaledVector(dir, fitDistance(sphere.radius) * 1.15), sphere.center.clone());
+};
 $("selIso").onclick = () => {
-  if (!state.selected) return;
-  for (const p of PARTS) if (partMeshes[p.id]) setHidden(p.id, p.id !== state.selected);
-  fitCurrent(partBox(state.selected));
+  const sel = state.selected;
+  if (!sel) return;
+  const main = mainOf(sel);
+  for (const p of PARTS) if (partMeshes[p.id]) setHidden(p.id, p.id !== main);
+  for (const c of COMPONENTS) if (partMeshes[c.id]) setHidden(c.id, sel !== main && c.id !== sel);
+  if (DOORS[main] && sel !== main) setDoor(main, true);
+  fitCurrent(partBox(main));
 };
 $("selHide").onclick = () => state.selected && setHidden(state.selected, !state.hidden.has(state.selected));
-$("showAll").onclick = () => { for (const p of PARTS) if (partMeshes[p.id]) setHidden(p.id, false); };
+$("showAll").onclick = () => { for (const p of ALL_PARTS) if (partMeshes[p.id]) setHidden(p.id, false); };
 $("resetAll").onclick = () => {
-  for (const p of PARTS) if (partMeshes[p.id]) setHidden(p.id, false);
+  for (const p of ALL_PARTS) if (partMeshes[p.id]) setHidden(p.id, false);
+  for (const id in DOORS) setDoor(id, false);
+  setTags(true);
   state.render = "solid";
   document.querySelectorAll("#renderMode button").forEach((x) => x.setAttribute("aria-pressed", x.dataset.r === "solid"));
   state.edges = true; $("oEdges").checked = true;
@@ -1210,7 +1479,7 @@ $("resetAll").onclick = () => {
   state.shadows = true; $("oShadow").checked = true;
   state.section = false; state.sAxis = "y"; state.sPos = 500; $("sPos").value = 500; applySection();
   explodeAnim = null; state.explode = 0; applyExplode();
-  setDims(true); select(null); setMode("select");
+  setDims(false); select(null); setMode("select");
   if (state.rotate) $("tRotate").click();
   setView("iso");
 };
@@ -1219,6 +1488,7 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "Escape") { if (pending) cancelPending(); else if (state.mode === "measure") setMode("select"); else select(null); }
   else if (e.key === "m" || e.key === "M") setMode(state.mode === "measure" ? "select" : "measure");
   else if (e.key === "f" || e.key === "F") fitCurrent();
+  else if (e.key === "t" || e.key === "T") setTags(!state.tags);
 });
 
 /* ---------- resize + loop ---------- */
@@ -1252,11 +1522,18 @@ function loop(now) {
     applyExplode();
     if (k >= 1) explodeAnim = null;
   }
+  let doorMoved = false;
+  for (const id in DOORS) {
+    const d = state.doorTarget[id] - state.door[id];
+    if (Math.abs(d) > 0.001) { state.door[id] += Math.sign(d) * Math.min(Math.abs(d), 0.035); doorMoved = true; }
+  }
+  if (doorMoved && !explodeAnim) applyExplode();
   controls.update();
   /* keep measurement dots a constant size on screen */
   for (const o of measGroup.children) if (o.geometry === dotGeo) o.scale.setScalar(dotScale(o.position));
   renderer.render(scene, camera);
   updateLabels();
+  updateTags();
 }
 
 /* ---------- start ---------- */
@@ -1273,9 +1550,11 @@ async function start() {
   model.updateMatrixWorld(true);
   baseBox = new THREE.Box3().setFromObject(model);
   buildPartList();
+  buildTags();
   applyTheme();
   buildDims();
-  setDims(true);
+  setDims(false);
+  setTags(true);
   applySection();
   applyExplode();
   refreshAppearance();
