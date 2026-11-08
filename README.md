@@ -6,6 +6,8 @@ CAD drawings and an interactive 3D viewer for a plastic shredder + heat press pr
 
 ![3D model](prototype_3d_preview.png)
 
+![Exploded view with part numbers](prototype_3d_exploded.png)
+
 ## Files
 
 | File | What it is |
@@ -14,6 +16,7 @@ CAD drawings and an interactive 3D viewer for a plastic shredder + heat press pr
 | `prototype.dxf` | 2D general arrangement (front, top, right side views) with numbered balloons, control panel details A/B and component list, black and white |
 | `prototype_color.dxf` | Same drawing with true-to-colour fills; lines and text black |
 | `prototype_3d.dxf` | True-to-colour 3D model (MESH entities) |
+| `prototype_3d_preview.png` / `prototype_3d_exploded.png` | 3D preview images; the exploded one has numbered balloons 1–15 and the panel doors open |
 | `index.html` / `prototype_3d_viewer.html` | Web 3D viewer: numbered part tags, parts list with control panel components (C1–C19), exploded view with opening panel doors, measuring tool, dimensions, section cut |
 | `make_prototype_dxf.py` | Generates the 2D drawings |
 | `make_prototype_3d.py` | Generates the 3D DXF and the web viewer (uses `viewer_template.html`) |
@@ -36,5 +39,5 @@ Requires Python 3 and `ezdxf` (`pip install ezdxf matplotlib`).
 ```bash
 python make_prototype_dxf.py prototype.dxf                    # 2D, black and white
 python make_prototype_dxf.py prototype_color.dxf --color      # 2D, colour fills
-python make_prototype_3d.py prototype_3d.dxf prototype_3d_preview.png   # 3D + viewer + index.html
+python make_prototype_3d.py prototype_3d.dxf prototype_3d_preview.png   # 3D + both preview images + viewer + index.html
 ```

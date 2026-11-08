@@ -35,7 +35,7 @@ for name, key in LAYER_COLOR.items():
     doc.layers.add(name, true_color=ezdxf.rgb2int(C[key]))
 doc.layers.add("TEXT", color=7)
 
-MESHES = []   # (rgb, vertices, faces) - also used for the preview
+MESHES = []   # (rgb, vertices, faces, part, door) - also used for the previews
 PRIMS = []    # primitive list exported for the web viewer
 PART = "frame"
 DOOR = None   # panel id whose hinged door this geometry rides on (web viewer swings it open)
@@ -60,7 +60,7 @@ def add(layer, verts, faces, col=None, rec=True):
     mb.add_mesh(vertices=verts, faces=faces)
     mesh = mb.render_mesh(msp, dxfattribs={"layer": layer})
     mesh.rgb = rgb
-    MESHES.append((rgb, verts, faces))
+    MESHES.append((rgb, verts, faces, PART, DOOR))
 
 
 def box(x1, y1, z1, x2, y2, z2, layer, col=None):
@@ -338,36 +338,116 @@ if os.path.exists(_tpl):
         open(sys.argv[3], "w", encoding="utf-8").write(html)
     print("saved prototype_3d_viewer.html", len(PRIMS), "primitives")
 
-if len(sys.argv) > 2 and sys.argv[2] != "-":      # optional shaded preview png
+# ---- shaded preview images (normal + exploded with numbered balloons) ----
+# explode offsets (mm) and balloon anchors match the web viewer (viewer_template.html)
+EXPLODE = {"hopper": (0, 0, 430), "cutters": (0, -720, 0), "chute": (0, -380, 90),
+           "bin": (0, -820, 0), "hydraulic": (0, 0, 620), "crown": (0, 0, 400),
+           "upper_platen": (0, 0, 180), "mould": (0, -860, 0), "panel_s": (-360, -260, 0),
+           "panel_p": (360, -260, 0), "drive": (320, 0, 0)}
+DOORS = {"panel_s": ((-20, -150), -110), "panel_p": ((1980, -100), 110)}   # hinge (x, y), degrees
+TAGS = [  # (no, part, point on the part, balloon offset) all in mm
+    (1, "hopper", (200, 45, 1290), (-420, -150, 260)),
+    (2, "cutters", (450, 230, 770), (-250, -380, -380)),
+    (3, "housing", (760, 100, 1010), (-60, -500, 330)),
+    (4, "chute", (870, 300, 790), (150, -700, -250)),
+    (5, "bin", (480, 130, 450), (-300, -420, -300)),
+    (6, "hydraulic", (1310, 290, 1170), (330, -150, 300)),
+    (7, "crown", (960, 50, 1060), (-360, -300, 260)),
+    (8, "pillars", (1665, 600, 860), (450, 250, 440)),
+    (9, "upper_platen", (1100, 50, 860), (-380, -420, 120)),
+    (10, "lower_platen", (1500, 50, 720), (300, -520, -60)),
+    (11, "mould", (1300, 75, 560), (300, -440, -300)),
+    (12, "panel_s", (-20, -75, 900), (-380, 120, 320)),
+    (13, "panel_p", (1980, 0, 1100), (420, 100, 300)),
+    (14, "frame", (1670, 0, 300), (380, -300, -150)),
+    (15, "drive", (1080, 400, 820), (250, 250, 450)),
+]
+
+
+def _place(v, part, door, explode):
+    """Move a vertex to its exploded position (doors swing open on their hinges)."""
+    if not explode:
+        return tuple(v)
+    x, y, z = v
+    if door:
+        (px, py), ang = DOORS[door]
+        a = math.radians(ang)
+        dx, dy = x - px, y - py
+        x, y = px + dx * math.cos(a) - dy * math.sin(a), py + dx * math.sin(a) + dy * math.cos(a)
+    ex = EXPLODE.get(part if part in EXPLODE else ("panel_s" if part in
+                     ("c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8", "c9") else
+                     "panel_p" if part.startswith("c") else part), (0, 0, 0))
+    return (x + ex[0], y + ex[1], z + ex[2])
+
+
+def render_preview(path, explode=False):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import proj3d
     from mpl_toolkits.mplot3d.art3d import Poly3DCollection
     light = Vec3(-0.4, -0.7, 0.6).normalize()
     polys, cols = [], []
-    for rgb, verts, faces in MESHES:
+    for rgb, verts, faces, prt, door in MESHES:
+        moved = [_place(v, prt, door, explode) for v in verts]
         for face in faces:
-            pts = [Vec3(verts[i]) for i in face]
+            pts = [Vec3(moved[i]) for i in face]
             nrm = (pts[1] - pts[0]).cross(pts[2] - pts[0])
             k = 0.55 + 0.45 * abs(nrm.normalize().dot(light)) if nrm.magnitude else 0.8
             polys.append([tuple(p) for p in pts])
             cols.append(tuple(min(1, c / 255 * k) for c in rgb))
-    fig = plt.figure(figsize=(14, 10))
+    fig = plt.figure(figsize=(16, 12) if explode else (14, 10))
     ax = fig.add_subplot(projection="3d")
     ax.add_collection3d(Poly3DCollection(polys, facecolors=cols,
                                          edgecolor=(0, 0, 0, 0.35), linewidths=0.25))
-    ax.set_xlim(-100, 2000); ax.set_ylim(-500, 1200); ax.set_zlim(0, 1500)
-    ax.set_box_aspect((2100, 1700, 1500))
+    if explode:
+        lim = ((-700, 2500), (-1300, 1000), (0, 2150))
+    else:
+        lim = ((-100, 2000), (-500, 1200), (0, 1500))
+    ax.set_xlim(*lim[0]); ax.set_ylim(*lim[1]); ax.set_zlim(*lim[2])
+    ax.set_box_aspect(tuple(b - a for a, b in lim))
     ax.view_init(elev=22, azim=-60)
     ax.set_axis_off()
-    plt.savefig(sys.argv[2], dpi=250, bbox_inches="tight", facecolor="white")
+    if explode:
+        from matplotlib.patches import Circle
+        fig.canvas.draw()
+        M = ax.get_proj()
+        W, H = fig.bbox.width, fig.bbox.height
+        ov = fig.add_axes([0, 0, 1, 1], zorder=10)      # 2D overlay in screen pixels
+        ov.set_xlim(0, W); ov.set_ylim(0, H); ov.set_axis_off(); ov.patch.set_alpha(0)
+        r = 17                                          # balloon radius (px at 100 dpi)
+        for no, prt, at, off in TAGS:
+            a = _place(at, prt, None, True)
+            b = (a[0] + off[0], a[1] + off[1], a[2] + off[2])
+            pa = ax.transData.transform(proj3d.proj_transform(*a, M)[:2])
+            pb = ax.transData.transform(proj3d.proj_transform(*b, M)[:2])
+            d = pa - pb
+            start = pb + d / (d ** 2).sum() ** 0.5 * r      # leader starts on the circle edge
+            ov.annotate("", xy=pa, xytext=start, arrowprops=dict(
+                arrowstyle="-|>,head_length=0.7,head_width=0.3", color="#15181c", lw=1.2,
+                shrinkA=0, shrinkB=0))
+            ov.add_patch(Circle(pb, r, fc="white", ec="#15181c", lw=1.4, zorder=5))
+            ov.text(*pb, str(no), ha="center", va="center", fontsize=12.5, fontweight="bold",
+                    zorder=6)
+        ax.set_title("EXPLODED VIEW  -  numbers match the parts list; panel doors shown open",
+                     fontsize=13, pad=0, y=0.93)
+    plt.savefig(path, dpi=400, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
     try:   # trim the empty margin matplotlib leaves around a 3D plot
         from PIL import Image, ImageChops
-        im = Image.open(sys.argv[2]).convert("RGB")
+        im = Image.open(path).convert("RGB")
         box = ImageChops.difference(im, Image.new("RGB", im.size, "white")).getbbox()
         if box:
             pad = 40
             im.crop((max(0, box[0] - pad), max(0, box[1] - pad), min(im.width, box[2] + pad),
-                     min(im.height, box[3] + pad))).save(sys.argv[2])
+                     min(im.height, box[3] + pad))).save(path)
     except ImportError:
         pass
+    print("saved", path)
+
+
+if len(sys.argv) > 2 and sys.argv[2] != "-":      # optional preview pngs
+    render_preview(sys.argv[2])
+    base, ext = os.path.splitext(sys.argv[2])
+    name = base.replace("preview", "exploded") if "preview" in base else base + "_exploded"
+    render_preview(name + ext, explode=True)
