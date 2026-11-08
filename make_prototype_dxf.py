@@ -580,7 +580,7 @@ notes = ("NOTES:\\P"
          "4. PLATEN WORKING TEMP. 160°C (SET ON TEMP. CONTROLLER).\\P"
          "5. BALLOONS = PARTS LIST NO.; C1-C19 = PANEL COMPONENTS.")
 msp.add_mtext(notes, dxfattribs={"layer": "TEXT", "char_height": 24,
-                                 "insert": (NX, NY - 60), "width": 1450})
+                                 "insert": (NX, NY - 60), "width": 1250})
 
 # title block
 BX, BY, BW, BH = 4000, -690, 1300, 260

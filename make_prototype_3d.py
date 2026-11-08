@@ -360,4 +360,14 @@ if len(sys.argv) > 2 and sys.argv[2] != "-":      # optional shaded preview png
     ax.set_box_aspect((2100, 1700, 1500))
     ax.view_init(elev=22, azim=-60)
     ax.set_axis_off()
-    plt.savefig(sys.argv[2], dpi=110, bbox_inches="tight", facecolor="white")
+    plt.savefig(sys.argv[2], dpi=250, bbox_inches="tight", facecolor="white")
+    try:   # trim the empty margin matplotlib leaves around a 3D plot
+        from PIL import Image, ImageChops
+        im = Image.open(sys.argv[2]).convert("RGB")
+        box = ImageChops.difference(im, Image.new("RGB", im.size, "white")).getbbox()
+        if box:
+            pad = 40
+            im.crop((max(0, box[0] - pad), max(0, box[1] - pad), min(im.width, box[2] + pad),
+                     min(im.height, box[3] + pad))).save(sys.argv[2])
+    except ImportError:
+        pass
